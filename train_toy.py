@@ -6,6 +6,9 @@ import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
 import wandb
+import torch.distributed as dist
+from torch.utils.data.distributed import DistributedSampler
+
 
 class SimpleCNN(nn.Module):
     def __init__(self, num_classes=10):
@@ -29,13 +32,39 @@ def train(args):
     print("Using device:", device)
 
     wandb.init(project="ddp-toy")
+
+
     transform = transforms.Compose([transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])])
 
+    
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
 
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    if args.mode == "ddp":
+        dist.init_process_group(backend = args.backend)
+
+    if args.mode == "ddp":
+        train_sampler = DistributedSampler(trainset)
+        trainloader = torch.utils.data.DataLoader(
+            trainset, batch_size=args.batch_size, sampler=train_sampler, num_workers=2
+        )
+    else:
+        trainloader = torch.utils.data.DataLoader(
+            trainset, batch_size=args.batch_size, shuffle=True, num_workers=2
+        )
+
 
     model = SimpleCNN().to(device)
+
+    if args.mode == "dp":
+        print("Running in DataParallel mode...")
+        model = nn.DataParallel(model)
+    elif args.mode == "ddp":
+        print("Running in Distributed DataParallel mode...")
+        model = nn.parallel.DistributedDataParallel(
+            model, device_ids=[args.local_rank]
+        )
+
+
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 
@@ -67,6 +96,10 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--mode", choices=["single", "dp","ddp"], default="single")
+    parser.add_argument("--backend", type=str, default="nccl")
+    parser.add_argument("--world_size", type = int, default = 0)
+
     args = parser.parse_args()
 
     train(args)
