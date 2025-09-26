@@ -96,10 +96,10 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--learning_rate", type=float, default=0.001)
-    parser.add_argument("--mode", choices=["single", "dp","ddp"], default="single")
+    parser.add_argument("--mode", choices=["single", "dp", "ddp"], default="single")
     parser.add_argument("--backend", type=str, default="nccl")
-    parser.add_argument("--world_size", type = int, default = 0)
+    parser.add_argument("--world_size", type=int, default=1)
+    parser.add_argument("--local_rank", type=int, default=0)   # 🔹 add this line
 
     args = parser.parse_args()
-
     train(args)
