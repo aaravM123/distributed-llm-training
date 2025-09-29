@@ -73,11 +73,15 @@ def train(args):
         for i, (inputs, labels) in enumerate(trainloader, 0):
             inputs, labels = inputs.to(device), labels.to(device)
 
-            optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
+
+            loss = loss / args.grad_accum_steps
             loss.backward()
-            optimizer.step()
+
+            if (i+1) % args.grad_accum_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
 
             wandb.log({"loss": loss.item()})
 
@@ -102,7 +106,8 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=["single", "dp", "ddp"], default="single")
     parser.add_argument("--backend", type=str, default="nccl")
     parser.add_argument("--world_size", type=int, default=1)
-    parser.add_argument("--local_rank", type=int, default=0)   # 🔹 add this line
+    parser.add_argument("--local_rank", type=int, default=0)  
+    parser.add_argument("--grad_accum_steps", type = int, default=1, help="Number of steps to accumulate gradients before updating.")
 
     args = parser.parse_args()
     train(args)
