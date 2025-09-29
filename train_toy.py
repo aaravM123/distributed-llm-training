@@ -90,6 +90,9 @@ def train(args):
                 running_loss = 0.0
 
     print("Finished Training")
+    
+    if args.mode == "ddp":
+        dist.destroy_process_group()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
