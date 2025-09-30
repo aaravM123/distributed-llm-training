@@ -98,6 +98,16 @@ def train(args):
     if args.mode == "ddp":
         dist.destroy_process_group()
 
+def main():
+    import torch.distributed as dist
+
+    if dist.is_initialized():
+        rank = dist.get_rank()
+        world_size = dist.get_world_size()
+        print(f"Hello from rank {rank} out of {world_size}")
+        dist.barrier()
+        print(f"Rank {rank} passed barrier")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=2)
@@ -110,4 +120,5 @@ if __name__ == "__main__":
     parser.add_argument("--grad_accum_steps", type = int, default=1, help="Number of steps to accumulate gradients before updating.")
 
     args = parser.parse_args()
+    main()
     train(args)
