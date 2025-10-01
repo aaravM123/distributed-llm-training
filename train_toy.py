@@ -8,6 +8,7 @@ import torchvision.transforms as transforms
 import wandb
 import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
+from torch.cuda.amp import autocast, GradScaler
 
 
 class SimpleCNN(nn.Module):
@@ -67,20 +68,23 @@ def train(args):
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+    scaler = GradScaler(enabled=args.use_amp)
 
     for epoch in range(args.epochs):
         running_loss = 0.0
         for i, (inputs, labels) in enumerate(trainloader, 0):
             inputs, labels = inputs.to(device), labels.to(device)
 
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            with autocast(enabled=args.use_amp):
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                loss = loss / args.grad_accum_steps
 
-            loss = loss / args.grad_accum_steps
-            loss.backward()
+            scaler.scale(loss).backward()
 
             if (i+1) % args.grad_accum_steps == 0:
-                optimizer.step()
+                scaler.step(optimizer)
+                scaler.update()
                 optimizer.zero_grad()
 
             wandb.log({"loss": loss.item()})
@@ -118,6 +122,7 @@ if __name__ == "__main__":
     parser.add_argument("--world_size", type=int, default=1)
     parser.add_argument("--local_rank", type=int, default=0)  
     parser.add_argument("--grad_accum_steps", type = int, default=1, help="Number of steps to accumulate gradients before updating.")
+    parser.add_argument("--use_amp", action="store_true", help="Enable mixed precision training")
 
     args = parser.parse_args()
     main()
