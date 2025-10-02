@@ -5,6 +5,34 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from torch.optim import AdamW
 import argparse
 
+def collate_fn(batch):
+    """Custom collate function to handle variable-length sequences"""
+    # Get the maximum length in the batch
+    max_len = max(len(item['input_ids']) for item in batch)
+    
+    # Pad sequences to the same length
+    input_ids = []
+    attention_masks = []
+    labels = []
+    
+    for item in batch:
+        # Pad input_ids
+        padded_input_ids = item['input_ids'] + [0] * (max_len - len(item['input_ids']))
+        input_ids.append(torch.tensor(padded_input_ids))
+        
+        # Pad attention_mask
+        padded_attention_mask = item['attention_mask'] + [0] * (max_len - len(item['attention_mask']))
+        attention_masks.append(torch.tensor(padded_attention_mask))
+        
+        # Labels don't need padding
+        labels.append(item['label'])
+    
+    return {
+        'input_ids': torch.stack(input_ids),
+        'attention_mask': torch.stack(attention_masks),
+        'label': torch.tensor(labels)
+    }
+
 def main(args):  
     dataset = load_dataset("ag_news")
 
@@ -16,7 +44,7 @@ def main(args):
     dataset = dataset.map(tokenize, batched=True)
     dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
 
-    train_loader = DataLoader(dataset["train"], batch_size=args.batch_size, shuffle=True)
+    train_loader = DataLoader(dataset["train"], batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
 
     model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=4)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
