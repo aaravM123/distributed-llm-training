@@ -23,7 +23,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    optimizer = AdamW(model.parameters(), lr=5e-5)
+    optimizer = AdamW(model.parameters(), lr=args.lr)
 
     for epoch in range(args.epochs):
         model.train()
@@ -56,3 +56,5 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type = int, default = 16, help = "Training Batch Size")
     parser.add_argument("--lr", type=float, default = 5e-5, help = "Learning Rate")
     args = parser.parse_args()
+
+    main(args)
