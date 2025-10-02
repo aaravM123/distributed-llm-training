@@ -16,13 +16,25 @@ def collate_fn(batch):
     labels = []
     
     for item in batch:
+        # Convert to tensor if not already
+        input_ids_tensor = torch.tensor(item['input_ids']) if not isinstance(item['input_ids'], torch.Tensor) else item['input_ids']
+        attention_mask_tensor = torch.tensor(item['attention_mask']) if not isinstance(item['attention_mask'], torch.Tensor) else item['attention_mask']
+        
         # Pad input_ids
-        padded_input_ids = item['input_ids'] + [0] * (max_len - len(item['input_ids']))
-        input_ids.append(torch.tensor(padded_input_ids))
+        if len(input_ids_tensor) < max_len:
+            padding = torch.zeros(max_len - len(input_ids_tensor), dtype=input_ids_tensor.dtype)
+            padded_input_ids = torch.cat([input_ids_tensor, padding])
+        else:
+            padded_input_ids = input_ids_tensor
+        input_ids.append(padded_input_ids)
         
         # Pad attention_mask
-        padded_attention_mask = item['attention_mask'] + [0] * (max_len - len(item['attention_mask']))
-        attention_masks.append(torch.tensor(padded_attention_mask))
+        if len(attention_mask_tensor) < max_len:
+            padding = torch.zeros(max_len - len(attention_mask_tensor), dtype=attention_mask_tensor.dtype)
+            padded_attention_mask = torch.cat([attention_mask_tensor, padding])
+        else:
+            padded_attention_mask = attention_mask_tensor
+        attention_masks.append(padded_attention_mask)
         
         # Labels don't need padding
         labels.append(item['label'])
