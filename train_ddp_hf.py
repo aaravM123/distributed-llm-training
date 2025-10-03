@@ -93,7 +93,8 @@ def main(args):
         avg_loss = total_loss / len(train_loader)
         elapsed = time.time() - start_time
         throughput = len(train_loader.dataset) / elapsed
-        print(f"Epoch {epoch+1} finished. Average Loss: {avg_loss:.4f}")
+        print(f"Epoch {epoch+1} finished. Avg Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s, Throughput: {throughput:.2f} samples/sec")
+
 
 
 if __name__ == "__main__":
