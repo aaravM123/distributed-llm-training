@@ -48,6 +48,9 @@ def collate_fn(batch):
 def main(args):  
     dataset = load_dataset("ag_news")
 
+    dataset["train"] = dataset["train"].select(range(1000))
+    dataset["test"] = dataset["test"].select(range(200))
+
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
     def tokenize(batch):

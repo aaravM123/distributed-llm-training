@@ -68,3 +68,7 @@
 [Epoch 2, Step 500] loss: 0.953
 [Epoch 2, Step 600] loss: 0.971
 [Epoch 2, Step 700] loss: 0.924
+[Epoch 1, Step 100] loss: 1.762
+[Epoch 1, Step 200] loss: 1.420
+[Epoch 1, Step 300] loss: 1.302
+[Epoch 1, Step 100] loss: 1.781

@@ -1,0 +1,56 @@
+[1mdiff --git a/train_ddp_hf.py b/train_ddp_hf.py[m
+[1mindex 4187041..9d78a19 100644[m
+[1m--- a/train_ddp_hf.py[m
+[1m+++ b/train_ddp_hf.py[m
+[36m@@ -1,23 +1,22 @@[m
+ import torch[m
+ from torch.utils.data import DataLoader[m
+ from datasets import load_dataset[m
+[31m-from transformers import AutoTokenizer[m
+[31m-from transformers import AutoModelForSequenceClassification[m
+[32m+[m[32mfrom transformers import AutoTokenizer, AutoModelForSequenceClassification[m
+ from torch.optim import AdamW[m
+ import argparse[m
+ [m
+[31m-def main():[m
+[32m+[m[32mdef main(args):[m[41m  [m
+     dataset = load_dataset("ag_news")[m
+ [m
+     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")[m
+ [m
+     def tokenize(batch):[m
+[31m-        return tokenizer(batch["text"], padding=True, truncation=True, max_length = 128)[m
+[32m+[m[32m        return tokenizer(batch["text"], padding=True, truncation=True, max_length=128)[m
+ [m
+     dataset = dataset.map(tokenize, batched=True)[m
+     dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])[m
+ [m
+[31m-    train_loader  = DataLoader(dataset["train"], batch_size=args.batch_size, shuffle=True)[m
+[32m+[m[32m    train_loader = DataLoader(dataset["train"], batch_size=args.batch_size, shuffle=True)[m
+ [m
+     model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=4)[m
+     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")[m
+[36m@@ -35,7 +34,7 @@[m [mdef main():[m
+             attention_mask = batch["attention_mask"].to(device)[m
+             labels = batch["label"].to(device)[m
+ [m
+[31m-            outputs = model(input_ids, attention_mask = attention_mask, labels = labels)[m
+[32m+[m[32m            outputs = model(input_ids, attention_mask=attention_mask, labels=labels)[m
+             loss = outputs.loss[m
+ [m
+             loss.backward()[m
+[36m@@ -52,9 +51,9 @@[m [mdef main():[m
+ [m
+ if __name__ == "__main__":[m
+     parser = argparse.ArgumentParser()[m
+[31m-    parser.add_argument("--epochs", type=int, default = 3)[m
+[31m-    parser.add_argument("--batch_size", type = int, default = 16, help = "Training Batch Size")[m
+[31m-    parser.add_argument("--lr", type=float, default = 5e-5, help = "Learning Rate")[m
+[32m+[m[32m    parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs")[m
+[32m+[m[32m    parser.add_argument("--batch_size", type=int, default=16, help="Training batch size")[m
+[32m+[m[32m    parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")[m
+     args = parser.parse_args()[m
+ [m
+[31m-    main(args)[m
+\ No newline at end of file[m
+[32m+[m[32m    main(args)[m[41m [m
