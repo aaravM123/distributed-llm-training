@@ -67,7 +67,9 @@ def main(args):
 
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
+    import time
     for epoch in range(args.epochs):
+        start_time = time.time()
         model.train()
         total_loss = 0
 
@@ -89,6 +91,8 @@ def main(args):
                 print(f"Epoch {epoch+1}, Step {step}, Loss: {loss.item():.4f}")
 
         avg_loss = total_loss / len(train_loader)
+        elapsed = time.time() - start_time
+        throughput = len(train_loader.dataset) / elapsed
         print(f"Epoch {epoch+1} finished. Average Loss: {avg_loss:.4f}")
 
 
