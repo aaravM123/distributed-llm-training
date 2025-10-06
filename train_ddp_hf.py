@@ -4,6 +4,8 @@ from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from torch.optim import AdamW
 import argparse
+import os
+import torch.distributed as dist
 
 def collate_fn(batch):
     """Custom collate function to handle variable-length sequences"""
@@ -59,15 +61,35 @@ def main(args):
     dataset = dataset.map(tokenize, batched=True)
     dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
 
-    train_loader = DataLoader(dataset["train"], batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
+    if args.mode == "ddp":
+        dist.init_process_group(backend = "nccl")
+        local_rank = int(os.environ["LOCAL_RANK",0])
+        torch.cuda.set_device(local_rank)
+        device = torch.device("cuda", local_rank)
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if args.mode == "ddp":
+        train_sampler = torch.utils.data.distributed.DistributedSampler(dataset["train"])
+        shuffle = False
+    else:
+        train_sampler = None
+        shuffle = True
+
+    train_loader = DataLoader(
+        dataset["train"], batch_size = args.batch_size, shuffle = shuffle, sampler = train_sampler, collate_fn = collate_fn
+    )
 
     model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=4)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    if args.mode == "dp":
+    if args.mode == "ddp":
+        model = torch.nn.DistributedDataParallel(model, device_ids = [device.index])
+
+    elif args.mode == "dp" and torch.cuda.device_count():
         print(f"Using DataParallel on {torch.cuda.device_count()} GPUs")
-        model = torch.nn.DataParallel(model)
+        model = torch.nn.DataParallel(model)    
     
 
     optimizer = AdamW(model.parameters(), lr=args.lr)
@@ -100,7 +122,8 @@ def main(args):
         throughput = len(train_loader.dataset) / elapsed
         print(f"Epoch {epoch+1} finished. Avg Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s, Throughput: {throughput:.2f} samples/sec")
 
-
+    if args.mode == "ddp":
+        dist.destroy_process_group()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
