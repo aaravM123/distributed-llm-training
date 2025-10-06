@@ -63,7 +63,7 @@ def main(args):
 
     if args.mode == "ddp":
         dist.init_process_group(backend = "nccl")
-        local_rank = int(os.environ["LOCAL_RANK",0])
+        local_rank = int(os.environ.get("LOCAL_RANK", 0))
         torch.cuda.set_device(local_rank)
         device = torch.device("cuda", local_rank)
     else:
@@ -87,7 +87,7 @@ def main(args):
     if args.mode == "ddp":
         model = torch.nn.DistributedDataParallel(model, device_ids = [device.index])
 
-    elif args.mode == "dp" and torch.cuda.device_count():
+    elif args.mode == "dp" and torch.cuda.device_count()>1:
         print(f"Using DataParallel on {torch.cuda.device_count()} GPUs")
         model = torch.nn.DataParallel(model)    
     
