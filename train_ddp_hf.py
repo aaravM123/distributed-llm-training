@@ -85,7 +85,7 @@ def main(args):
     model.to(device)
 
     if args.mode == "ddp":
-        model = torch.nn.DistributedDataParallel(model, device_ids = [device.index])
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids = [device.index])
 
     elif args.mode == "dp" and torch.cuda.device_count()>1:
         print(f"Using DataParallel on {torch.cuda.device_count()} GPUs")
