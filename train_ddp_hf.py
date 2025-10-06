@@ -65,6 +65,11 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
+    if args.mode == "dp":
+        print(f"Using DataParallel on {torch.cuda.device_count()} GPUs")
+        model = torch.nn.DataParallel(model)
+    
+
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
     import time
@@ -102,6 +107,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=16, help="Training batch size")
     parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")
+    parser.add_argument("--mode", type = str, default = "single", choices = ["single", "dp", "ddp"], help = "Training mode: single GPU,DataParallel (dp), or DDP (ddp)")
     args = parser.parse_args()
 
     main(args) 
