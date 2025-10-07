@@ -94,8 +94,26 @@ def main(args):
 
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
+    start_epoch = 0
+    checkpoint_path = "checkpoint.pt"
+
+    if os.path.exists(checkpoint_path):
+        map_location = {"cuda:%d" % 0: f"cuda:{device.index}"}
+        ckpt = torch.load(checkpoint_path, map_location = map_location)
+
+        model_to_load = model.module if hasattr(model,"module") else model
+        model_to_load.load_state_dict(ckpt["model_state"])
+        optimizer.load_state_dict(ckpt["optimizer_state"])
+        start_epoch = ckpt["epoch"] + 1
+
+        if args.mode != "ddp" or dist.get_rank() == 0:
+            print(f"Resumed training from epoch {ckpt['epoch']+1}")
+    else:
+        if args.mode != "ddp" or dist.get_rank() == 0:
+            print("Starting fresh training (no checkpoint found).")
+
     import time
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         start_time = time.time()
         model.train()
         total_loss = 0
@@ -133,7 +151,7 @@ def main(args):
 
             dist.barrier()
 
-            
+
     if args.mode == "ddp":
         dist.destroy_process_group()
 
