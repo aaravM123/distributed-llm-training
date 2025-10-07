@@ -81,7 +81,6 @@ def main(args):
     )
 
     model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=4)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     if args.mode == "ddp":
@@ -94,20 +93,28 @@ def main(args):
 
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
+    # --- Resume logic ---
     start_epoch = 0
     checkpoint_path = "checkpoint.pt"
 
     if os.path.exists(checkpoint_path):
-        map_location = {"cuda:%d" % 0: f"cuda:{device.index}"}
-        ckpt = torch.load(checkpoint_path, map_location = map_location)
+        # map_location automatically matches current device (GPU or CPU)
+        map_location = device if device.type == "cuda" else "cpu"
+        ckpt = torch.load(checkpoint_path, map_location=map_location)
 
-        model_to_load = model.module if hasattr(model,"module") else model
+        model_to_load = model.module if hasattr(model, "module") else model
         model_to_load.load_state_dict(ckpt["model_state"])
         optimizer.load_state_dict(ckpt["optimizer_state"])
-        start_epoch = ckpt["epoch"] + 1
 
+        # Move optimizer tensors to correct device
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(device)
+
+        start_epoch = ckpt["epoch"] + 1
         if args.mode != "ddp" or dist.get_rank() == 0:
-            print(f"Resumed training from epoch {ckpt['epoch']+1}")
+            print(f"Resumed training from epoch {start_epoch}")
     else:
         if args.mode != "ddp" or dist.get_rank() == 0:
             print("Starting fresh training (no checkpoint found).")
@@ -146,9 +153,11 @@ def main(args):
                 "model_state": model.module.state_dict() if hasattr(model, "module") else model.state_dict(),
                 "optimizer_state": optimizer.state_dict(),
             }
-            torch.save(checkpoint, f"checkpoint.pt")
+            torch.save(checkpoint, "checkpoint.pt")
             print(f"[Rank 0] checkpoint saved for epoch {epoch+1}")
 
+        # All ranks wait here (safe even if single GPU)
+        if args.mode == "ddp":
             dist.barrier()
 
 
