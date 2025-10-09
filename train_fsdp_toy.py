@@ -46,6 +46,13 @@ start_time = time.time()
 torch.cuda.reset_peak_memory_stats()
 
 for epoch in range(args.epochs):
+    model.train()
+    total_loss = 0.0
+
+    # Reset timing and memory tracking for each epoch
+    torch.cuda.reset_peak_memory_stats()
+    start_time = time.time()
+
     for step, (inputs, labels) in enumerate(loader):
         optimizer.zero_grad()
         outputs = model(inputs)
@@ -53,14 +60,25 @@ for epoch in range(args.epochs):
         loss.backward()
         optimizer.step()
 
+        total_loss += loss.item()
+
         if step % 5 == 0 and dist.get_rank() == 0:
             print(f"Epoch {epoch}, Step {step}, Loss: {loss.item():.4f}")
 
-elapsed = time.time() - start_time
-throughput = len(loader.dataset) / elapsed
-peak_mem = torch.cuda.max_memory_allocated() / 1e6
-if dist.get_rank() == 0:
-    print(f"Time: {elapsed:.2f}s, Throughput: {throughput:.2f} samples/sec, Peak Mem: {peak_mem:.2f} MB")
+    # Compute epoch metrics
+    avg_loss = total_loss / len(loader)
+    elapsed = time.time() - start_time
+    throughput = len(loader.dataset) / elapsed
+    peak_mem = torch.cuda.max_memory_allocated() / 1e6
+
+    if dist.get_rank() == 0:
+        print(
+            f"Epoch {epoch} finished. "
+            f"Avg Loss: {avg_loss:.4f}, "
+            f"Time: {elapsed:.2f}s, "
+            f"Throughput: {throughput:.2f} samples/sec, "
+            f"Peak Mem: {peak_mem:.2f} MB"
+        )
 
 if dist.is_initialized():
     dist.destroy_process_group()
