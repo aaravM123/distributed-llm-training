@@ -4,7 +4,7 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.utils.data import DataLoader, TensorDataset
 import torch.nn as nn
 import torch.optim as optim
-import argeparse
+import argparse
 import os
 
 parser = argparse.ArgumentParser()
@@ -15,7 +15,7 @@ parser.add_argument("--backend", type=str, default = "nccl")
 args = parser.parse_args()
 
 dist.init_process_group(backend = args.backend)
-local_rank = int(os.environ("LOCAL_RANK",0))
+local_rank = int(os.environ.get("LOCAL_RANK",0))
 torch.cuda.set_device(local_rank)
 device = torch.device("cuda", local_rank)
 
