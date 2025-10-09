@@ -52,7 +52,7 @@ for epoch in range(args.epochs):
         if step % 5 == 0 and dist.get_rank() == 0:
             print(f"Epoch {epoch}, Step {step}, Loss: {loss.item():.4f}")
 
-dist.destroy_process_group()
-
 if dist.get_rank() == 0:
     print("Peak Memory Usage: ", torch.cuda.max_memory_allocated() / 1e6, "MB")
+
+dist.destroy_process_group()
