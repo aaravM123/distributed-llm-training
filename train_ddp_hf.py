@@ -95,8 +95,11 @@ def main(args):
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
     import time
+    start_time = time.time()
+    torch.cuda.reset_peak_memory_stats()
+
     for epoch in range(args.epochs):
-        start_time = time.time()
+        epoch_start = time.time()
         model.train()
         total_loss = 0
 
@@ -118,9 +121,15 @@ def main(args):
                 print(f"Epoch {epoch+1}, Step {step}, Loss: {loss.item():.4f}")
 
         avg_loss = total_loss / len(train_loader)
-        elapsed = time.time() - start_time
-        throughput = len(train_loader.dataset) / elapsed
-        print(f"Epoch {epoch+1} finished. Avg Loss: {avg_loss:.4f}, Time: {elapsed:.2f}s, Throughput: {throughput:.2f} samples/sec")
+        epoch_elapsed = time.time() - epoch_start
+        epoch_throughput = len(train_loader.dataset) / epoch_elapsed
+        print(f"Epoch {epoch+1} finished. Avg Loss: {avg_loss:.4f}, Time: {epoch_elapsed:.2f}s, Throughput: {epoch_throughput:.2f} samples/sec")
+
+    elapsed = time.time() - start_time
+    throughput = len(train_loader.dataset) / elapsed
+    peak_mem = torch.cuda.max_memory_allocated() / 1e6
+    if dist.get_rank() == 0:
+        print(f"Time: {elapsed:.2f}s, Throughput: {throughput:.2f} samples/sec, Peak Mem: {peak_mem:.2f} MB")
 
     if args.mode == "ddp":
         dist.destroy_process_group()

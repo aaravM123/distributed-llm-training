@@ -41,6 +41,10 @@ loader = DataLoader(dataset, batch_size = args.batch_size, shuffle = True)
 optimizer = optim.Adam(model.parameters(), lr = args.lr)
 criterion = nn.CrossEntropyLoss()
 
+import time
+start_time = time.time()
+torch.cuda.reset_peak_memory_stats()
+
 for epoch in range(args.epochs):
     for step, (inputs, labels) in enumerate(loader):
         optimizer.zero_grad()
@@ -52,8 +56,11 @@ for epoch in range(args.epochs):
         if step % 5 == 0 and dist.get_rank() == 0:
             print(f"Epoch {epoch}, Step {step}, Loss: {loss.item():.4f}")
 
-if dist.is_initialized() and dist.get_rank() == 0:
-    print("Peak Memory Usage: ", torch.cuda.max_memory_allocated() / 1e6, "MB")
+elapsed = time.time() - start_time
+throughput = len(loader.dataset) / elapsed
+peak_mem = torch.cuda.max_memory_allocated() / 1e6
+if dist.get_rank() == 0:
+    print(f"Time: {elapsed:.2f}s, Throughput: {throughput:.2f} samples/sec, Peak Mem: {peak_mem:.2f} MB")
 
 if dist.is_initialized():
     dist.destroy_process_group()
