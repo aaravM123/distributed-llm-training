@@ -128,7 +128,7 @@ def main(args):
     elapsed = time.time() - start_time
     throughput = len(train_loader.dataset) / elapsed
     peak_mem = torch.cuda.max_memory_allocated() / 1e6
-    if dist.get_rank() == 0:
+    if args.mode != "ddp" or dist.get_rank() == 0:
         print(f"Time: {elapsed:.2f}s, Throughput: {throughput:.2f} samples/sec, Peak Mem: {peak_mem:.2f} MB")
 
     if args.mode == "ddp":
