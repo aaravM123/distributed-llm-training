@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import argparse
 import os
-from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import GradScaler, autocast
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--epochs", type=int, default=1)
@@ -41,7 +41,7 @@ loader = DataLoader(dataset, batch_size = args.batch_size, shuffle = True)
 
 optimizer = optim.Adam(model.parameters(), lr = args.lr)
 criterion = nn.CrossEntropyLoss()
-scaler = GradScaler()
+scaler = GradScaler('cuda')
 
 import time
 start_time = time.time()
@@ -58,7 +58,7 @@ for epoch in range(args.epochs):
     for step, (inputs, labels) in enumerate(loader):
         optimizer.zero_grad()
 
-        with autocast():
+        with autocast('cuda'):
             outputs = model(inputs)
             loss = criterion(outputs, labels)
         
