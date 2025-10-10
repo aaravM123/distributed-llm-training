@@ -47,7 +47,7 @@ checkpoint_path = "fsdp_checkpoint.pt"
 start_epoch = 0
 
 if os.path.exists(checkpoint_path):
-    map_location = {"cuda:%d % 0: cuda:%d" % (local_rank)}
+    map_location = {"cuda:%d" % 0: "cuda:%d" % (local_rank)}
     checkpoint = torch.load(checkpoint_path, map_location=map_location)
     model.load_state_dict(checkpoint["model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
