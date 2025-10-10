@@ -58,7 +58,7 @@ for epoch in range(args.epochs):
     for step, (inputs, labels) in enumerate(loader):
         optimizer.zero_grad()
 
-        with autocast(device_type='cuda'):
+        with autocast():
             outputs = model(inputs)
             loss = criterion(outputs, labels)
         
