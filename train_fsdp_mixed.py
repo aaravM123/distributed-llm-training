@@ -43,11 +43,23 @@ optimizer = optim.Adam(model.parameters(), lr = args.lr)
 criterion = nn.CrossEntropyLoss()
 scaler = GradScaler()
 
+checkpoint_path = "fsdp_checkpoint.pt"
+start_epoch = 0
+
+if os.path.exists(checkpoint_path):
+    map_location = {"cuda:%d % 0: cuda:%d" % (local_rank)}
+    checkpoint = torch.load(checkpoint_path, map_location=map_location)
+    model.load_state_dict(checkpoint["model"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    scaler.load_state_dict(checkpoint["scaler"])
+    start_epoch = checkpoint["epoch"] + 1
+    print(f"Resumed training from epoch {start_epoch}")
+
 import time
 start_time = time.time()
 torch.cuda.reset_peak_memory_stats()
 
-for epoch in range(args.epochs):
+for epoch in range(start_epoch, args.epochs):
     model.train()
     total_loss = 0.0
 
@@ -85,6 +97,14 @@ for epoch in range(args.epochs):
             f"Throughput: {throughput:.2f} samples/sec, "
             f"Peak Mem: {peak_mem:.2f} MB"
         )
+        
+        torch.save({
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scaler": scaler.state_dict(),
+            "epoch": epoch,
+        }, "fsdp_checkpoint.pt")
+        print(f"[Rank 0] Check point saved for epoch {epoch}")
 
 if dist.is_initialized():
     dist.destroy_process_group()
