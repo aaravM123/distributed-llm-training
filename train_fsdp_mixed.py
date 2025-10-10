@@ -41,7 +41,7 @@ loader = DataLoader(dataset, batch_size = args.batch_size, shuffle = True)
 
 optimizer = optim.Adam(model.parameters(), lr = args.lr)
 criterion = nn.CrossEntropyLoss()
-scaler = GradScaler('cuda')
+scaler = GradScaler()
 
 import time
 start_time = time.time()
@@ -58,7 +58,7 @@ for epoch in range(args.epochs):
     for step, (inputs, labels) in enumerate(loader):
         optimizer.zero_grad()
 
-        with autocast('cuda'):
+        with autocast(device_type='cuda'):
             outputs = model(inputs)
             loss = criterion(outputs, labels)
         
