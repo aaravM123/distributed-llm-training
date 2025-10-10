@@ -1,0 +1,90 @@
+import torch
+import torch.distributed as dist
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.utils.data import DataLoader, TensorDataset
+import torch.nn as nn
+import torch.optim as optim
+import argparse
+import os
+from torch.cuda.amp import autocast, GradScaler
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--epochs", type=int, default=1)
+parser.add_argument("--batch_size", type=int, default=8)
+parser.add_argument("--lr", type=float, default=1e-3)
+parser.add_argument("--backend", type=str, default = "nccl")
+args = parser.parse_args()
+
+dist.init_process_group(backend = args.backend)
+local_rank = int(os.environ.get("LOCAL_RANK",0))
+torch.cuda.set_device(local_rank)
+device = torch.device("cuda", local_rank)
+
+class TestModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(10,64),
+            nn.ReLU(),
+            nn.Linear(64,2)
+        )
+    def forward(self,x):
+        return self.net(x)
+
+model = TestModel().to(device)
+model = FSDP(model)
+
+x = torch.randn(64,10).to(device)
+y = torch.randint(0,2,(64,)).to(device)
+dataset = TensorDataset(x,y)
+loader = DataLoader(dataset, batch_size = args.batch_size, shuffle = True)
+
+optimizer = optim.Adam(model.parameters(), lr = args.lr)
+criterion = nn.CrossEntropyLoss()
+scaler = GradScaler()
+
+import time
+start_time = time.time()
+torch.cuda.reset_peak_memory_stats()
+
+for epoch in range(args.epochs):
+    model.train()
+    total_loss = 0.0
+
+    # Reset timing and memory tracking for each epoch
+    torch.cuda.reset_peak_memory_stats()
+    start_time = time.time()
+
+    for step, (inputs, labels) in enumerate(loader):
+        optimizer.zero_grad()
+
+        with autocast():
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+        
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+
+        total_loss += loss.item()
+
+        if step % 5 == 0 and dist.get_rank() == 0:
+            print(f"Epoch {epoch}, Step {step}, Loss: {loss.item():.4f}")
+
+    # Compute epoch metrics
+    avg_loss = total_loss / len(loader)
+    elapsed = time.time() - start_time
+    throughput = len(loader.dataset) / elapsed
+    peak_mem = torch.cuda.max_memory_allocated() / 1e6
+
+    if dist.get_rank() == 0:
+        print(
+            f"Epoch {epoch} finished. "
+            f"Avg Loss: {avg_loss:.4f}, "
+            f"Time: {elapsed:.2f}s, "
+            f"Throughput: {throughput:.2f} samples/sec, "
+            f"Peak Mem: {peak_mem:.2f} MB"
+        )
+
+if dist.is_initialized():
+    dist.destroy_process_group()
