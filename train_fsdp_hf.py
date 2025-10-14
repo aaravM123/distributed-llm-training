@@ -2,7 +2,7 @@ import torch, torch.distributed as dist
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers.models.mistral.modeling_mistral import MistralDecoderLayer
+from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 from functools import partial
 import os
 
@@ -20,19 +20,19 @@ def main():
     else:
         device = torch.device("cpu")
 
-    model_name = "mistralai/Mistral-7B-Instruct-v0.2"
+    model_name = "meta-llama/Llama-2-7b-hf"
 
     print(f"[Rank {rank}] Initializing model...")
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map=None
     )
     #model.to(device)
 
     auto_wrap_policy = partial(
         transformer_auto_wrap_policy,
-        transformer_layer_cls={MistralDecoderLayer},
+        transformer_layer_cls={LlamaDecoderLayer},
     )
     model = FSDP(model, auto_wrap_policy=auto_wrap_policy)
 
