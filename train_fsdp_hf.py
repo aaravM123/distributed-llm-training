@@ -28,6 +28,7 @@ def main():
         torch_dtype=torch.bfloat16,
         device_map=None
     )
+    model.to(device)
 
     auto_wrap_policy = partial(
         transformer_auto_wrap_policy,
@@ -37,6 +38,8 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     print(f"[Rank {rank}] Model ready.")
+
+    dist.destroy_process_group()
 
 if __name__ == "__main__":
     main()
