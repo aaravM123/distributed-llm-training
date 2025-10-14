@@ -28,7 +28,7 @@ def main():
         torch_dtype=torch.bfloat16,
         device_map=None
     )
-    model.to(device)
+    #model.to(device)
 
     auto_wrap_policy = partial(
         transformer_auto_wrap_policy,
