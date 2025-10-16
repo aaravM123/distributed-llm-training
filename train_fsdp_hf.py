@@ -25,8 +25,12 @@ def main():
 
     # NOTE: Increase --nproc_per_node to >1 to activate true sharding.
     # With 1 GPU, FSDP runs in NO_SHARD mode (no real memory savings).
-    # Local substitute for lightweight fine-tuning
-    model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-token"
+    # Optimal model for 3.8GB GPU - DistilGPT-2 (82M params, ~300MB)
+    model_name = "distilgpt2"
+    # Alternative options for 3.8GB GPU:
+    # model_name = "gpt2"  # 124M params, ~500MB
+    # model_name = "microsoft/DialoGPT-small"  # 117M params, ~500MB
+    # model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # 1.1B params, ~2GB
     # To use the full-size model later, uncomment this line instead:
     # model_name = "meta-llama/Llama-2-7b-hf"
 
