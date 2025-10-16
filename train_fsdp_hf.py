@@ -2,7 +2,7 @@ import torch, torch.distributed as dist
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers.models.llama.modeling_llama import LlamaDecoderLayer
+from transformers.models.gpt2.modeling_gpt2 import GPT2Block
 from functools import partial
 from datasets import load_dataset
 from torch.utils.data import DataLoader
@@ -44,7 +44,7 @@ def main():
     lora_config = LoraConfig(
         r=8,
         lora_alpha=32,
-        target_modules=["q_proj", "v_proj"],
+        target_modules=["c_attn", "c_proj"],  # DistilGPT-2 specific modules
         bias="none",
         task_type="CAUSAL_LM"
     )
@@ -54,7 +54,7 @@ def main():
 
     auto_wrap_policy = partial(
         transformer_auto_wrap_policy,
-        transformer_layer_cls={LlamaDecoderLayer},
+        transformer_layer_cls={GPT2Block},
     )
     model = FSDP(model, auto_wrap_policy=auto_wrap_policy)
     print(f"[Rank {rank}] ✅ Model wrapped with FSDP and ready for training.")
