@@ -46,17 +46,18 @@ def main():
         lora_alpha=32,
         target_modules=["c_attn", "c_proj"],  # DistilGPT-2 specific modules
         bias="none",
-        task_type="CAUSAL_LM"
+        task_type="CAUSAL_LM",
+        torch_dtype=torch.bfloat16  # Ensure LoRA uses same dtype as model
     )
     model = get_peft_model(model, lora_config)
     print(f"[Rank {rank}] LoRA applied to model.")
-    #model.to(device)
+    model.to(device)  # Move to GPU before FSDP
 
     auto_wrap_policy = partial(
         transformer_auto_wrap_policy,
         transformer_layer_cls={GPT2Block},
     )
-    model = FSDP(model, auto_wrap_policy=auto_wrap_policy)
+    model = FSDP(model, auto_wrap_policy=auto_wrap_policy, device_id=local_rank)
     print(f"[Rank {rank}] ✅ Model wrapped with FSDP and ready for training.")
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
