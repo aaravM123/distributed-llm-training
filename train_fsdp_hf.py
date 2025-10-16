@@ -25,15 +25,25 @@ def main():
 
     # NOTE: Increase --nproc_per_node to >1 to activate true sharding.
     # With 1 GPU, FSDP runs in NO_SHARD mode (no real memory savings).
-    model_name = "meta-llama/Llama-2-7b-hf"
-    # For small GPU testing, use: model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-token"
+    # model_name = "meta-llama/Llama-2-7b-hf"  # Too large for single GPU
+    model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-token"  # Better for testing
 
     print(f"[Rank {rank}] Initializing model...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        dtype=torch.bfloat16,
-        device_map=None
-    )
+    if torch.cuda.is_available():
+        print(f"[Rank {rank}] GPU Memory before loading: {torch.cuda.memory_allocated()/1024**3:.2f}GB / {torch.cuda.memory_reserved()/1024**3:.2f}GB")
+    
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            dtype=torch.bfloat16,
+            device_map=None,
+            low_cpu_mem_usage=True  # Helps with memory efficiency
+        )
+        print(f"[Rank {rank}] ✅ Model loaded successfully!")
+    except Exception as e:
+        print(f"[Rank {rank}] ❌ Model loading failed: {e}")
+        print(f"[Rank {rank}] 💡 Try using a smaller model or increasing GPU memory")
+        raise
 
     lora_config = LoraConfig(
         r=8,
