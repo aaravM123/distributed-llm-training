@@ -2,7 +2,7 @@ import torch, torch.distributed as dist
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers.models.gpt2.modeling_gpt2 import GPT2Block
+from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 from functools import partial
 from datasets import load_dataset
 from torch.utils.data import DataLoader
@@ -25,14 +25,8 @@ def main():
 
     # NOTE: Increase --nproc_per_node to >1 to activate true sharding.
     # With 1 GPU, FSDP runs in NO_SHARD mode (no real memory savings).
-    # Optimal model for 3.8GB GPU - DistilGPT-2 (82M params, ~300MB)
-    model_name = "distilgpt2"
-    # Alternative options for 3.8GB GPU:
-    # model_name = "gpt2"  # 124M params, ~500MB
-    # model_name = "microsoft/DialoGPT-small"  # 117M params, ~500MB
-    # model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # 1.1B params, ~2GB
-    # To use the full-size model later, uncomment this line instead:
-    # model_name = "meta-llama/Llama-2-7b-hf"
+    model_name = "meta-llama/Llama-2-7b-hf"
+    # For small GPU testing, use: model_name = "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-token"
 
     print(f"[Rank {rank}] Initializing model...")
     model = AutoModelForCausalLM.from_pretrained(
@@ -44,10 +38,9 @@ def main():
     lora_config = LoraConfig(
         r=8,
         lora_alpha=32,
-        target_modules=["c_attn", "c_proj"],  # DistilGPT-2 specific modules
+        target_modules=["q_proj", "v_proj"],
         bias="none",
-        task_type="CAUSAL_LM",
-        torch_dtype=torch.bfloat16  # Ensure LoRA uses same dtype as model
+        task_type="CAUSAL_LM"
     )
     model = get_peft_model(model, lora_config)
     print(f"[Rank {rank}] LoRA applied to model.")
@@ -55,7 +48,7 @@ def main():
 
     auto_wrap_policy = partial(
         transformer_auto_wrap_policy,
-        transformer_layer_cls={GPT2Block},
+        transformer_layer_cls={LlamaDecoderLayer},
     )
     model = FSDP(model, auto_wrap_policy=auto_wrap_policy, device_id=local_rank)
     print(f"[Rank {rank}] ✅ Model wrapped with FSDP and ready for training.")
