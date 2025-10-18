@@ -45,6 +45,10 @@ def main():
     model = get_peft_model(model, lora_config)
     print(f"[Rank {rank}] LoRA applied to model.")
     model.to(device)  # Move to GPU before FSDP
+    
+    # Ensure all parameters have the same dtype for FSDP
+    for param in model.parameters():
+        param.data = param.data.to(torch.bfloat16)
 
     auto_wrap_policy = partial(
         transformer_auto_wrap_policy,
