@@ -85,7 +85,6 @@ def main():
     )
 
     optimizer = torch.optim.AdamW(model.parameters(), lr = 2e-5)
-    scaler = torch.cuda.amp.GradScaler()
 
     model.train()
     for epoch in range(1):
@@ -100,9 +99,8 @@ def main():
                 )
                 loss = outputs.loss
             optimizer.zero_grad()
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            loss.backward()
+            optimizer.step()
             if i % 10 == 0 and dist.get_rank() == 0:
                 print(f"Step {i}, Loss: {loss.item():.4f}")
         peak = torch.cuda.max_memory_allocated() / 1024**2
