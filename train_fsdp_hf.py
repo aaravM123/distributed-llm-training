@@ -58,6 +58,9 @@ def main():
     print(f"[Rank {rank}] ✅ Model wrapped with FSDP and ready for training.")
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # Set padding token for Llama tokenizer
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     if dist.get_rank() == 0:
         print("[Data] Loading WikiText-2 small subset...")
 
