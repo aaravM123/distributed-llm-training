@@ -54,7 +54,7 @@ def main():
         transformer_auto_wrap_policy,
         transformer_layer_cls={LlamaDecoderLayer},
     )
-    model = FSDP(model, auto_wrap_policy=auto_wrap_policy, device_id=local_rank)
+    model = FSDP(model, auto_wrap_policy=auto_wrap_policy, device_id=local_rank, use_orig_params=True)
     print(f"[Rank {rank}] ✅ Model wrapped with FSDP and ready for training.")
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
