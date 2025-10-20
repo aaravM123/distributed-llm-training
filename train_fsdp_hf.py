@@ -91,7 +91,7 @@ def main():
         torch.cuda.reset_peak_memory_stats()
         for i, (input_ids, attn_mask) in enumerate(train_loader):
             input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
-            with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+            with torch.amp.autocast('cuda', dtype=torch.bfloat16):
                 outputs = model(
                     input_ids=input_ids,
                     attention_mask=attn_mask,
@@ -103,15 +103,54 @@ def main():
             optimizer.step()
             if i % 10 == 0 and dist.get_rank() == 0:
                 print(f"Step {i}, Loss: {loss.item():.4f}")
+            
+            # Save checkpoint every 50 steps to avoid losing progress
+            if i % 50 == 0 and i > 0 and dist.get_rank() == 0:
+                try:
+                    # Save only the LoRA parameters to avoid FSDP issues
+                    lora_state_dict = {k: v for k, v in model.state_dict().items() if 'lora' in k}
+                    torch.save(lora_state_dict, f"fsdp_lora_checkpoint_step_{i}.pt")
+                    print(f"[Checkpoint] LoRA parameters saved at step {i}")
+                except Exception as e:
+                    print(f"[Warning] Failed to save checkpoint at step {i}: {e}")
+        
         peak = torch.cuda.max_memory_allocated() / 1024**2
         if dist.get_rank() == 0:
             print(f"Epoch {epoch}, Peak Memory: {peak:.2f}MB")
     
+    # Final save with better error handling
     if dist.get_rank() == 0:
-        torch.save(model.state_dict(), "fsdp_lora_checkpoint.pt")
-        print("[Checkpoint] Model saved as fsdp_lora_checkpoint.pt")
+        try:
+            # Save only LoRA parameters to avoid FSDP state dict issues
+            lora_state_dict = {k: v for k, v in model.state_dict().items() if 'lora' in k}
+            torch.save(lora_state_dict, "fsdp_lora_checkpoint_final.pt")
+            print("[Checkpoint] Final LoRA parameters saved as fsdp_lora_checkpoint_final.pt")
+            
+            # Also save a backup
+            torch.save(lora_state_dict, "fsdp_lora_checkpoint_backup.pt")
+            print("[Checkpoint] Backup saved as fsdp_lora_checkpoint_backup.pt")
+        except Exception as e:
+            print(f"[Error] Failed to save final checkpoint: {e}")
+            # Try to save just the optimizer state as fallback
+            try:
+                torch.save(optimizer.state_dict(), "fsdp_optimizer_state.pt")
+                print("[Checkpoint] Optimizer state saved as fallback")
+            except Exception as e2:
+                print(f"[Error] Failed to save optimizer state: {e2}")
 
-    dist.destroy_process_group()
+    # Better cleanup with timeout handling
+    try:
+        # Give processes time to sync before cleanup
+        dist.barrier(timeout=torch.distributed.constants.default_pg_timeout)
+        dist.destroy_process_group()
+        print("[Cleanup] Process group destroyed successfully")
+    except Exception as e:
+        print(f"[Warning] Process group cleanup failed: {e}")
+        # Force cleanup
+        try:
+            dist.destroy_process_group()
+        except:
+            pass
 
 if __name__ == "__main__":
     main()

@@ -4,8 +4,9 @@ from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from torch.optim import AdamW
 import argparse
-import os
 import torch.distributed as dist
+import csv, torch, os, time
+
 
 def collate_fn(batch):
     """Custom collate function to handle variable-length sequences"""
@@ -18,11 +19,9 @@ def collate_fn(batch):
     labels = []
     
     for item in batch:
-        # Convert to tensor if not already
         input_ids_tensor = torch.tensor(item['input_ids']) if not isinstance(item['input_ids'], torch.Tensor) else item['input_ids']
         attention_mask_tensor = torch.tensor(item['attention_mask']) if not isinstance(item['attention_mask'], torch.Tensor) else item['attention_mask']
         
-        # Pad input_ids
         if len(input_ids_tensor) < max_len:
             padding = torch.zeros(max_len - len(input_ids_tensor), dtype=input_ids_tensor.dtype)
             padded_input_ids = torch.cat([input_ids_tensor, padding])
@@ -38,7 +37,6 @@ def collate_fn(batch):
             padded_attention_mask = attention_mask_tensor
         attention_masks.append(padded_attention_mask)
         
-        # Labels don't need padding
         labels.append(item['label'])
     
     return {
@@ -94,7 +92,6 @@ def main(args):
 
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
-    import time
     start_time = time.time()
     torch.cuda.reset_peak_memory_stats()
 
@@ -128,6 +125,13 @@ def main(args):
     elapsed = time.time() - start_time
     throughput = len(train_loader.dataset) / elapsed
     peak_mem = torch.cuda.max_memory_allocated() / 1e6
+
+    os.makedirs("results", exist_ok=True)
+    with open("results/benchmark_results.csv", "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([mode, n_gpus, batch_size, lr, epochs, elapsed, throughput, peak_mem])
+
+
     if not dist.is_initialized() or dist.get_rank() == 0:
         print(f"Time: {elapsed:.2f}s, Throughput: {throughput:.2f} samples/sec, Peak Mem: {peak_mem:.2f} MB")
 

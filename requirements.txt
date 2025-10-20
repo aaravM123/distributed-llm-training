@@ -5,3 +5,4 @@ peft>=0.4.0
 accelerate>=0.20.0
 huggingface-hub>=0.15.0
 safetensors>=0.3.0
+hf_transfer
