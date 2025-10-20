@@ -126,6 +126,13 @@ def main(args):
     throughput = len(train_loader.dataset) / elapsed
     peak_mem = torch.cuda.max_memory_allocated() / 1e6
 
+    # Define variables for CSV logging
+    mode = args.mode
+    n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    batch_size = args.batch_size
+    lr = args.lr
+    epochs = args.epochs
+    
     os.makedirs("results", exist_ok=True)
     with open("results/benchmark_results.csv", "a", newline="") as f:
         writer = csv.writer(f)
