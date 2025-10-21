@@ -90,7 +90,15 @@ def main(args):
         model = torch.nn.DataParallel(model)    
     
 
-    optimizer = AdamW(model.parameters(), lr=args.lr)
+    if args.resume_from and os.path.exists(args.resume_from):
+        print(f"Resuming from checkpoint {args.resume_from}")
+        ckpt = torch.load(args.resume_from)
+        model.load_state_dict(ckpt["model_state"])
+        optimizer = AdamW(model.parameters(), lr=args.lr)
+        optimizer.load_statr_dict(ckpt["optimizer_state"])
+        args.resume_step = ckpt.get("step", 0)
+    else:
+        optimizer = AdamW(model.parameters(), lr=args.lr)
 
     start_time = time.time()
     torch.cuda.reset_peak_memory_stats()
@@ -100,33 +108,52 @@ def main(args):
         model.train()
         total_loss = 0
 
+        grad_accumulation_steps = getattr(args, "grad_accumulation_steps", 1)
+
+        start_step = 0
+        if hasattr(args, "resume_step") and args.resume_step is not None:
+            start_step = args.resume_step
+            print(f"Resuming from the global step {start_step}")
+
+        optimizer.zero_grad()
+        torch.cuda.reset_peak_memory_stats()
+
         for step, batch in enumerate(train_loader):
-            optimizer.zero_grad()
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            labels = batch["label"].to(device)
+            if step < start_step:
+                continue
+
+            input_ids = batch["input_ids"].to(device, non_blocking=True)
+            attention_mask = batch["attention_mask"].to(device, non_blocking=True)
+            labels = batch["label"].to(device, non_blocking=True)
 
             outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
-            loss = outputs.loss
-
+            loss = outputs.loss / grad_accumulation_steps
             loss.backward()
-            optimizer.step()
+            total_loss += loss.item() * grad_accumulation_steps
 
-            total_loss += loss.item()
+            if (step+1) % grad_accumulation_steps == 0 or (step+1) == len(train_loader):
+                optimizer.step()
+                optimizer.zero_grad()
 
-            if step % 100 == 0:
-                print(f"Epoch {epoch+1}, Step {step}, Loss: {loss.item():.4f}")
+            if (step+1) % 100 == 0:
+                print(f"Epoch {epoch+1}, Step {step+1}, Loss: {loss.item()*grad_accumulation_steps:.4f}")
 
         avg_loss = total_loss / len(train_loader)
         epoch_elapsed = time.time() - epoch_start
         epoch_throughput = len(train_loader.dataset) / epoch_elapsed
-        print(f"Epoch {epoch+1} finished. Avg Loss: {avg_loss:.4f}, Time: {epoch_elapsed:.2f}s, Throughput: {epoch_throughput:.2f} samples/sec")
+        peak_mem = torch.cuda.max_memory_allocated() / 1e6
+        print(f"Epoch {epoch+1} finished. Avg Loss: {avg_loss:.4f}, Time: {epoch_elapsed:.2f}s, Throughput: {epoch_throughput:.2f} samples/sec, Peak Mem: {peak_mem:.0f} MB")
 
-    elapsed = time.time() - start_time
-    throughput = len(train_loader.dataset) / elapsed
-    peak_mem = torch.cuda.max_memory_allocated() / 1e6
+        if not dist.is_initialized() or dist.get_rank() == 0:
+            os.makedirs("checkpoints", exist_ok=True)
+            ckpt_path = f"checkpoints/epoch_{epoch+1}.pt"
+            torch.save({
+                "epoch": epoch,
+                "model_state": model.state_dict(),
+                "optimizer_state": optimizer.state_dict(),
+            }, ckpt_path)
+            print("Saved checkpoint to", {ckpt_path})
 
-    # Define variables for CSV logging
     mode = args.mode
     n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
     batch_size = args.batch_size
@@ -136,11 +163,17 @@ def main(args):
     os.makedirs("results", exist_ok=True)
     with open("results/benchmark_results.csv", "a", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow([mode, n_gpus, batch_size, lr, epochs, elapsed, throughput, peak_mem])
+        final_time = epoch_elapsed
+        final_throughput = epoch_throughput
+
+        os.makedirs("results", exist_ok=True)
+        with open("results/benchmark_results.csv", "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([mode, n_gpus, batch_size, lr, epochs, final_time, final_throughput, peak_mem])
 
 
     if not dist.is_initialized() or dist.get_rank() == 0:
-        print(f"Time: {elapsed:.2f}s, Throughput: {throughput:.2f} samples/sec, Peak Mem: {peak_mem:.2f} MB")
+        print(f"Time: {epoch_elapsed:.2f}s, Throughput: {epoch_throughput:.2f} samples/sec, Peak Mem: {peak_mem:.2f} MB")
 
     if args.mode == "ddp":
         dist.destroy_process_group()
@@ -151,6 +184,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=16, help="Training batch size")
     parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")
     parser.add_argument("--mode", type = str, default = "single", choices = ["single", "dp", "ddp"], help = "Training mode: single GPU,DataParallel (dp), or DDP (ddp)")
+    parser.add_argument("--grad_accumulation_steps", type=int, default=1)
+    parser.add_argument("--resume_step", type=int, default=None, help="Resume training from a specific step")
     args = parser.parse_args()
 
     main(args) 
