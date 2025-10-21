@@ -184,7 +184,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type = str, default = "single", choices = ["single", "dp", "ddp"], help = "Training mode: single GPU,DataParallel (dp), or DDP (ddp)")
     parser.add_argument("--grad_accumulation_steps", type=int, default=1)
     parser.add_argument("--resume_step", type=int, default=None, help="Resume training from a specific step")
-    parser.add_argument("--auto_wrap", type=str, default=None, help="Enable transformer_auto_wrap_policy for FSDP testing")
+    parser.add_argument("--auto_wrap", action="store_true", help="Enable transformer_auto_wrap_policy for FSDP testing")
     args = parser.parse_args()
 
     main(args) 
