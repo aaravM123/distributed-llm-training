@@ -90,15 +90,12 @@ def main(args):
         model = torch.nn.DataParallel(model)    
     
 
-    if args.resume_from and os.path.exists(args.resume_from):
-        print(f"Resuming from checkpoint {args.resume_from}")
-        ckpt = torch.load(args.resume_from)
-        model.load_state_dict(ckpt["model_state"])
-        optimizer = AdamW(model.parameters(), lr=args.lr)
-        optimizer.load_statr_dict(ckpt["optimizer_state"])
-        args.resume_step = ckpt.get("step", 0)
-    else:
-        optimizer = AdamW(model.parameters(), lr=args.lr)
+    optimizer = AdamW(model.parameters(), lr=args.lr)
+    
+    start_step = 0
+    if hasattr(args, "resume_step") and args.resume_step is not None:
+        print(f"Resuming from step {args.resume_step}")
+        start_step = args.resume_step
 
     start_time = time.time()
     torch.cuda.reset_peak_memory_stats()
@@ -109,12 +106,6 @@ def main(args):
         total_loss = 0
 
         grad_accumulation_steps = getattr(args, "grad_accumulation_steps", 1)
-
-        start_step = 0
-        if hasattr(args, "resume_step") and args.resume_step is not None:
-            start_step = args.resume_step
-            print(f"Resuming from the global step {start_step}")
-
         optimizer.zero_grad()
         torch.cuda.reset_peak_memory_stats()
 
