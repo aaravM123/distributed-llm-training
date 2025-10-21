@@ -3,6 +3,8 @@ from torch.utils.data import DataLoader
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from torch.optim import AdamW
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 import argparse
 import torch.distributed as dist
 import csv, torch, os, time
@@ -82,7 +84,12 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    if args.mode == "ddp":
+    if args.auto_wrap:
+        print("Using transformer _auto_wrap_policy to do FSDP wrapping.")
+        auto_wrap_policy = transformer_auto_wrap_policy
+        model = FSDP(model, auto_wrap_policy = auto_wrap_policy)
+
+    if args.mode == "ddp" and not args.auto_wrap:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids = [device.index])
 
     elif args.mode == "dp" and torch.cuda.device_count()>1:
@@ -177,6 +184,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type = str, default = "single", choices = ["single", "dp", "ddp"], help = "Training mode: single GPU,DataParallel (dp), or DDP (ddp)")
     parser.add_argument("--grad_accumulation_steps", type=int, default=1)
     parser.add_argument("--resume_step", type=int, default=None, help="Resume training from a specific step")
+    parser.add_argument("--auto_wrap", type=str, default=None, help="Enable transformer_auto_wrap_policy for FSDP testing")
     args = parser.parse_args()
 
     main(args) 
