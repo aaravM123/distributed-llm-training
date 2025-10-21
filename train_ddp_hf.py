@@ -5,6 +5,8 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from torch.optim import AdamW
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+from transformers.models.bert.modeling_bert import BertLayer
+from functools import partial
 import argparse
 import torch.distributed as dist
 import csv, torch, os, time
@@ -86,8 +88,8 @@ def main(args):
 
     if args.auto_wrap:
         print("Using transformer _auto_wrap_policy to do FSDP wrapping.")
-        auto_wrap_policy = transformer_auto_wrap_policy
-        model = FSDP(model, auto_wrap_policy = auto_wrap_policy)
+        auto_wrap_policy = partial(transformer_auto_wrap_policy, transformer_layer_cls=BertLayer)
+        model = FSDP(model, auto_wrap_policy=auto_wrap_policy)
 
     if args.mode == "ddp" and not args.auto_wrap:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids = [device.index])
